@@ -2,6 +2,12 @@
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,linux,astro,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,linux,astro,python
 
+credentials/
+*.json
+
+*.pyc
+.DS_Store
+
 ### Astro ###
 # Gitignore template for Astro projects
 # Ignore content collection generated files
