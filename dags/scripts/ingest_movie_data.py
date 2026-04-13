@@ -53,6 +53,10 @@ def upload_to_gcs(bucket_name: str, source_folder: str, destination_folder: str)
                     blob_name = f"{destination_folder}/{filename}"
                     blob = bucket.blob(blob_name)
 
+                    if blob.exists():
+                        logging.info(f"O arquivo {filename} já existe no GCS. Pulando upload.")
+                        continue 
+
                     logging.info(f"Fazendo upload de {filename} para gs://{bucket_name}/{blob_name}")
                     blob.upload_from_filename(file_path)
 

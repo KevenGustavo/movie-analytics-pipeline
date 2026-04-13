@@ -3,6 +3,7 @@ from pendulum import datetime
 import os
 from dotenv import load_dotenv
 
+from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
 from scripts.ingest_movie_data import download_data, upload_to_gcs
 
 load_dotenv()
@@ -28,9 +29,27 @@ def movie_ingestion_pipeline():
     
     @task
     def upload_to_gcs_task(source_path: str):
-        upload_to_gcs(bucket_name=bucket_name,source_folder=source_path,destination_folder=dest_folder)
+        upload_to_gcs(
+            bucket_name=bucket_name,
+            source_folder=source_path,
+            destination_folder=dest_folder
+        )
+
+    with open("/usr/local/airflow/include/sql/create_raw_tables.sql", "r") as f:
+        sql_raw_tables = f.read()
+
+    create_raw_tables_task = BigQueryInsertJobOperator(
+        task_id='create_raw_tables_in_bigquery',
+        configuration={
+            "query": {
+                "query": sql_raw_tables,
+                "useLegacySql": False,
+            }
+        }
+    )
 
     extracted_path = extract_data_task()
-    upload_to_gcs_task(extracted_path)
+    upload_task = upload_to_gcs_task(source_path=extracted_path)
+    upload_task >> create_raw_tables_task
 
 movie_ingestion_pipeline()
