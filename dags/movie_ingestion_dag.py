@@ -13,6 +13,12 @@ local_extract_path = os.getenv("LOCAL_EXTRACT_PATH","")
 bucket_name = os.getenv("GCS_BUCKET_NAME","")
 dest_folder = os.getenv("GCS_DESTINATION_FOLDER","")
 
+with open("/usr/local/airflow/include/sql/create_raw_tables.sql", "r") as f:
+        sql_raw_tables = f.read()
+
+with open("/usr/local/airflow/include/sql/create_analytics_tables.sql", "r") as f:
+        sql_analytics_tables = f.read()
+
 @dag(
     dag_id="movie_analytics_ingestion",
     schedule="@once",
@@ -35,9 +41,6 @@ def movie_ingestion_pipeline():
             destination_folder=dest_folder
         )
 
-    with open("/usr/local/airflow/include/sql/create_raw_tables.sql", "r") as f:
-        sql_raw_tables = f.read()
-
     create_raw_tables_task = BigQueryInsertJobOperator(
         task_id='create_raw_tables_in_bigquery',
         configuration={
@@ -48,8 +51,20 @@ def movie_ingestion_pipeline():
         }
     )
 
+    create_analytics_tables_task = BigQueryInsertJobOperator(
+        task_id='create_analytics_tables_in_bigquery',
+        location='US',
+        configuration={
+            "query": {
+                "query": sql_analytics_tables,
+                "useLegacySql": False,
+            }
+        }
+    )
+
     extracted_path = extract_data_task()
     upload_task = upload_to_gcs_task(source_path=extracted_path)
-    upload_task >> create_raw_tables_task
+    
+    upload_task >> create_raw_tables_task >> create_analytics_tables_task
 
 movie_ingestion_pipeline()
