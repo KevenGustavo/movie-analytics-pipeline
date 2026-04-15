@@ -1,45 +1,71 @@
-Overview
-========
+# **Pipeline End-to-End de Engenharia de Dados: MovieLens Analytics**
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+## **Visão Geral do Projeto**
 
-Project Contents
-================
+Este projeto consiste em uma arquitetura completa de **Modern Data Stack (MDS)** construída para extrair, carregar, transformar (ELT) e visualizar os dados do dataset público MovieLens. O objetivo foi desenhar um pipeline escalável e automatizado que simula o rigor de um ambiente produtivo, focando em modelagem dimensional, governança, otimização de custos e experiência de desenvolvimento (DX).  
+A orquestração é inteiramente gerenciada pelo **Apache Airflow** (via Astro CLI), garantindo o tráfego dos dados desde a fonte até a entrega de valor em um painel operacional no **Metabase**.
 
-Your Astro project contains the following files and folders:
+## **Arquitetura e Fluxo de Dados**
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+O pipeline segue a abordagem **ELT (Extract, Load, Transform)**, dividida nas seguintes etapas:
 
-Deploy Your Project Locally
-===========================
+1. **Extração (Python):** Download automatizado do arquivo .zip hospedado pelo GroupLens e extração seletiva dos arquivos CSV relevantes (movies.csv, user\_rating\_history.csv e belief\_data.csv).  
+2. **Data Lake / Landing Zone (GCS):** Upload inteligente dos dados brutos para o Google Cloud Storage.  
+3. **Data Warehouse \- Camada Raw (BigQuery):** Criação de *External Tables* apontando para o Data Lake, permitindo leitura via SQL sem duplicar custos de armazenamento.  
+4. **Data Warehouse \- Camada Analytics (BigQuery):** Processamento e limpeza dos dados brutos para a criação de tabelas nativas focadas em performance, estruturadas em um modelo dimensional (Star Schema: dim\_movies e fact\_ratings).  
+5. **Business Intelligence (Metabase):** Conexão direta com a camada Analytics para disponibilização de métricas de engajamento e catálogo em um dashboard interativo.
 
-Start Airflow on your local machine by running 'astro dev start'.
+## **Destaques Técnicos e Decisões de Engenharia**
 
-This command will spin up five Docker containers on your machine, each for a different Airflow component:
+Este repositório foi construído com foco nas melhores práticas de Engenharia e Arquitetura de Dados:
 
-- Postgres: Airflow's Metadata Database
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- DAG Processor: The Airflow component responsible for parsing DAGs
-- API Server: The Airflow component responsible for serving the Airflow UI and API
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+* **Idempotência e FinOps no GCS:** O script de upload valida a existência prévia do metadado no Google Cloud (blob.exists()). Se o arquivo já existir, o upload é ignorado, economizando banda de rede e custos de escrita na nuvem.  
+* **Infrastructure as Code (IaC) com Airflow:** A criação de datasets e tabelas no BigQuery não foi feita manualmente. Utilizei a TaskFlow API mesclada aos Operadores Clássicos do BigQuery para executar arquivos .sql desacoplados da DAG.  
+* **Data Quality na Origem (Null Markers):** Tratamento proativo de anomalias no dataset (como o registro "NA" no campo de notas), instruindo o motor do BigQuery a converter essas sujeiras em NULL logo na leitura da External Table, evitando falhas de *casting*.  
+* **Transformação e Regex Avançado:** Uso de Expressões Regulares (REGEXP\_REPLACE e REGEXP\_EXTRACT) para higienização de strings (separação do ano de lançamento embutido no título do filme) e tipagem segura (TIMESTAMP para DATETIME).  
+* **Developer Experience (DX) Unificada:** O Metabase foi acoplado ao ecossistema local do Airflow através de um arquivo docker-compose.override.yml. Isso significa que a infraestrutura completa sobe com um único comando de terminal.
 
-When all five containers are ready the command will open the browser to the Airflow UI at http://localhost:8080/. You should also be able to access your Postgres Database at 'localhost:5432/postgres' with username 'postgres' and password 'postgres'.
+## **Dashboard de Resultados**
 
-Note: If you already have either of the above ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+![Dashboard MovieLens Analytics no Metabase](docs/metabase_dashboard.png)
 
-Deploy Your Project to Astronomer
-=================================
+## **Como reproduzir este projeto**
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+### **1\. Pré-requisitos**
 
-Contact
-=======
+* **Docker** e Docker Compose instalados e rodando.  
+* **Astro CLI** instalado.  
+* Uma conta ativa no **Google Cloud Platform (GCP)**.
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+### **2\. Configuração de Credenciais e Nuvem**
+
+1. No GCP, crie um Bucket no Cloud Storage e anote o ID do seu projeto.  
+2. Gere um arquivo de credenciais de usuário (adc.json) através do gcloud auth application-default login.  
+3. Crie uma Conta de Serviço (Service Account) com papéis de *Usuário do BigQuery* e *Visualizador de Dados do BigQuery* e baixe a chave JSON para conectar o Metabase.  
+4. Clone este repositório: 
+
+   ```Bash  
+   git clone https://github.com/KevenGustavo/movie-analytics-pipeline
+   cd seu-repositorio
+   ```
+
+5. Crie uma pasta oculta chamada credentials/ na raiz do projeto e coloque seus arquivos JSON nela.  
+6. Copie o arquivo .env.example, renomeie para .env e preencha com suas informações da nuvem.
+
+### **3\. Executando a Infraestrutura**
+
+Com as variáveis de ambiente configuradas, inicie o orquestrador e o BI simultaneamente rodando:
+
+```Bash
+Bash
+
+astro dev start
+```
+
+* O **Apache Airflow** estará disponível em: http://localhost:8080 (Ative e execute a DAG movie\_analytics\_ingestion\_taskflow).  
+* O **Metabase** estará disponível em: http://localhost:3000.
+
+## **Próximos Passos (Evolução Contínua)**
+
+* Integrar o **dbt (Data Build Tool)** para assumir o papel das transformações SQL, implementando testes automatizados (Testes de Singularidade e Não-Nulos) na camada Analytics.  
+* Configurar CI/CD via GitHub Actions para deploy automatizado das DAGs no ambiente cloud.
